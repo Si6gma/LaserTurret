@@ -4,6 +4,11 @@
 
 This project uses OpenCV to detect faces in a webcam feed, and two servos controlled by an Arduino to move a laser pointer to follow the detected face.
 
+# Current Plan of Action:
+
+Using arctan (tan inverse), to figure out the two angles to control the yaw and pitch axis, manual calibration will be required to find Z
+![Coordination Plan](/Coordination%20Plan.png)
+
 ## Components
 
 - A webcam for capturing video feed.
