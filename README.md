@@ -9,6 +9,8 @@ This project uses OpenCV to detect faces in a webcam feed, and two servos contro
 Using arctan (tan inverse), to figure out the two angles to control the yaw and pitch axis, manual calibration will be required to find Z
 ![Coordination Plan](/Coordination%20Plan.png)
 
+`center_x` and `center_y` in `facialRecog.py` are the x and y coordinates
+
 ## Components
 
 - A webcam for capturing video feed.
