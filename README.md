@@ -15,6 +15,8 @@ The laser is at the origin for all the diagrams below:
 
 `center_x` and `center_y` in `facialRecog.py` are the x and y coordinates
 
+z coorinate is the distance between the object and the laser, which is not measurable due to technical limitations, therefore will require manual calibration beforehand.
+
 ## Components
 
 - A webcam for capturing video feed.
