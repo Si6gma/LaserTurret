@@ -4,9 +4,13 @@
 
 This project uses OpenCV to detect faces in a webcam feed, and two servos controlled by an Arduino to move a laser pointer to follow the detected face.
 
-# Current Plan of Action:
+# Coordination System (WIP)
 
-Using arctan (tan inverse), to figure out the two angles to control the yaw and pitch axis, manual calibration will be required to find Z
+The two servos control the pitch (x-axis), and yaw (y-axis)
+
+Using arctan (tan inverse), we can figure out the two angles `α - pitch, θ - yaw` to control the laser.
+
+The laser is at the origin for all the diagrams below:
 ![Coordination Plan](/Coordination%20Plan.png)
 
 `center_x` and `center_y` in `facialRecog.py` are the x and y coordinates
