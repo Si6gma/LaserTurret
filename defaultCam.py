@@ -1,5 +1,5 @@
 import cv2
-
+# Just a normal camera frame for testing
 cap0 = cv2.VideoCapture(0)
 ret0, frame0 = cap0.read()
 
@@ -15,7 +15,7 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Release the webcam and destroy all windows
+
 cap0.release()
 cv2.destroyAllWindows()
 
