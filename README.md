@@ -2,7 +2,7 @@
 
 **Work In Progress**
 
-This project uses OpenCV to detect faces in a webcam feed, and two servos controlled by an Arduino to move a laser pointer to follow the detected face.
+This project uses OpenCV to detect faces in a webcam feed, and two servos(motors) controlled by an Arduino to move a laser pointer to follow the detected face.
 
 _Basically it points a laser into someone's eye_
 
