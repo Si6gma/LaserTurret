@@ -6,18 +6,16 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fronta
 
 
 # Open the webcam
+# Value inside depends on which camera is being used (depends on your system)
 cap = cv2.VideoCapture(1)
 
 # Storing the resolution of the camera (in pixels)
 f_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 f_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-# Function to calculate angle
+# Calculating angle
 def anglecalc(horizontal,vertical):
-    tan1 = vertical/horizontal
-    yaw = math.atan(tan1)
-    yaw = math.floor(yaw*(180/math.pi))
-    print(yaw)
+    return math.floor(math.atan(vertical/horizontal)*(180/math.pi))
     
 
 # Displaying the resolution
@@ -52,7 +50,8 @@ while True:
         cv2.circle(frame, (c_x, c_y), radius=2, color=(0, 0, 255), thickness=-1)
 
         # Sending the coordinates to the function to calculate the angle, (y is inverted since 0,0 is on the top left and we want it to be on the bottom left)
-        anglecalc(c_x,f_h-c_y)
+        yaw = anglecalc(c_x,f_h-c_y)
+        print(yaw)
 
 
     # Draws a green point at the center of the frame
