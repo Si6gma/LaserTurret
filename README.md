@@ -34,6 +34,7 @@ The laser is at the origin for all the diagrams below:
 - Arduino IDE
 
 - Enable the Virtual Environment by inputting the following command
+
 *On Windows*:
 ```
 .\env\Scripts\activate
