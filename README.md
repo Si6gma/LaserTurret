@@ -33,9 +33,16 @@ The laser is at the origin for all the diagrams below:
 - PySerial library for Python-Arduino communication
 - Arduino IDE
 
-## How It Works
+## How it works (programmer edition)
 
-1. The Python script uses OpenCV to capture video from the webcam and detect faces in each frame.
-2. The coordinates of the detected face are transformed from the webcam frame's coordinate system to the servo's coordinate system.
-3. The transformed coordinates are sent to the Arduino via serial communication.
-4. The Arduino moves the servos to point the laser at the received coordinates.
+1. The Python script uses _OpenCV_ to capture video from the webcam and detect faces in each frame.
+2. The coordinates of the detected face are transformed _(using arctan shown in the coordination img)_ from the webcam frame's coordinate system to the servo's angles.
+3. The transformed angles are sent to the Arduino via serial communication _(Pyserial)_.
+4. The Arduino moves the servos to point the laser at the received angles.
+
+## How it works (non-programmer edition)
+
+1. Camera take location of face
+2. It send to motors
+3. Motors aim at target
+4. Laser go brrrr
