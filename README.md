@@ -13,7 +13,7 @@ The two servos control the pitch (x-axis), and yaw (y-axis)
 Using arctan (tan inverse), we can figure out the two angles `α - pitch, θ - yaw` to control the laser.
 
 The laser is at the origin for all the diagrams below:
-![Coordination Plan](/Coordination%20Plan.png)
+![Coordination Plan](/assets/Coordination%20Plan.png)
 
 `center_x` and `center_y` in `facialRecog.py` are the x and y coordinates
 
@@ -28,23 +28,10 @@ The laser is at the origin for all the diagrams below:
 
 ## Software Dependencies
 
-- Python 3
+- Python(3)
 - OpenCV Python library
 - PySerial library for Python-Arduino communication
 - Arduino IDE
-
-- Enable the Virtual Environment by inputting the following command
-  _On Windows_:
-
-```
-.\env\Scripts\activate
-```
-
-_On macOS/Linus_:
-
-```
-source env/bin/activate
-```
 
 ## How It Works
 
