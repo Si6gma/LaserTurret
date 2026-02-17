@@ -1,97 +1,298 @@
+"""
+Laser Turret - Face Tracking Application
+
+Uses OpenCV for face detection and controls Arduino servos
+to track detected faces.
+
+Author: Si6gma
+License: MIT
+"""
+
 import cv2
 import math
 import serial
 import time
 import os
+from typing import Tuple, Optional
 
-# Import configuration
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+# Import local configuration if available
 try:
-    from config_local import SERIAL_PORT, SERIAL_BAUD, CAMERA_INDEX, DEFAULT_PITCH
+    from config_local import (
+        SERIAL_PORT, 
+        SERIAL_BAUD, 
+        CAMERA_INDEX, 
+        DEFAULT_PITCH,
+        SMOOTHING_FACTOR
+    )
 except ImportError:
     # Default configuration - update these for your system
     SERIAL_PORT = "/dev/cu.usbmodemDC5475C3BB642"  # Change to your Arduino port
     SERIAL_BAUD = 9600
     CAMERA_INDEX = 1  # 0 for default camera, 1 for external webcam
     DEFAULT_PITCH = 40
+    SMOOTHING_FACTOR = 0.3  # Higher = smoother but more lag
 
-# Load the Haar cascade file for face detection
-face_cascade = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-)
+# =============================================================================
+# CONSTANTS
+# =============================================================================
 
-# Establish a serial connection
-print(f"Connecting to Arduino on {SERIAL_PORT}...")
-ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD)
+# Haar cascade file for face detection
+FACE_CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 
-# Allow some time for the connection to establish
-time.sleep(2)
+# Servo limits (degrees)
+YAW_MIN = 0
+YAW_MAX = 180
+PITCH_MIN = 0
+PITCH_MAX = 180
 
-print("⚠️  SAFETY REMINDER: Ensure laser is removed or replaced with LED before use!")
-print("Press 'q' to quit\n")
+# Frame processing
+FRAME_DELAY_MS = 1  # Delay between frames (ms)
+QUIT_KEY = ord('q')
 
-# Open the webcam (the value inside depends on your system)
-cap = cv2.VideoCapture(CAMERA_INDEX)
+# =============================================================================
+# FUNCTIONS
+# =============================================================================
 
-# Store the resolution of the camera (in pixels)
-f_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-f_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+def calculate_angle(horizontal: float, vertical: float) -> int:
+    """
+    Calculate angle from horizontal and vertical distances.
+    
+    Args:
+        horizontal: Horizontal distance from center
+        vertical: Vertical distance from center
+        
+    Returns:
+        Angle in degrees (0-180)
+    """
+    if horizontal == 0:
+        return 90  # Center position
+    angle = math.atan(vertical / horizontal) * (180 / math.pi)
+    return int(max(YAW_MIN, min(YAW_MAX, angle + 90)))
 
 
-# Function to calculate angle
-def anglecalc(horizontal, vertical):
-    return math.floor(math.atan(vertical / horizontal) * (180 / math.pi))
+def smooth_angle(current: int, target: int, factor: float = SMOOTHING_FACTOR) -> int:
+    """
+    Smooth angle transitions to reduce servo jitter.
+    
+    Args:
+        current: Current angle
+        target: Target angle
+        factor: Smoothing factor (0-1)
+        
+    Returns:
+        Smoothed angle
+    """
+    return int(current + (target - current) * factor)
 
-    # Print the video resolution
+
+def find_available_cameras(max_index: int = 5) -> list[int]:
+    """
+    Scan for available camera indices.
+    
+    Returns:
+        List of available camera indices
+    """
+    available = []
+    for i in range(max_index):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            available.append(i)
+            cap.release()
+    return available
 
 
-print(f"Video resolution: {f_w}x{f_h}")
+# =============================================================================
+# MAIN APPLICATION
+# =============================================================================
 
-while True:
-    # Read frames from the webcam
-    ret, frame = cap.read()
+def main():
+    """Main application entry point."""
+    
+    print("=" * 60)
+    print("Laser Turret - Face Tracking System")
+    print("=" * 60)
+    
+    # Safety reminder
+    print("\n⚠️  SAFETY REMINDER:")
+    print("   Ensure laser is removed or replaced with LED before use!")
+    print("   Never aim at people's eyes.\n")
+    
+    # Load face detection model
+    print("Loading face detection model...")
+    face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
+    if face_cascade.empty():
+        print("❌ Error: Could not load face cascade classifier")
+        return
+    print("✓ Face detection model loaded")
+    
+    # Connect to Arduino
+    print(f"\nConnecting to Arduino on {SERIAL_PORT}...")
+    try:
+        ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=1)
+        time.sleep(2)  # Wait for Arduino reset
+        print("✓ Connected to Arduino")
+    except serial.SerialException as e:
+        print(f"❌ Error: Could not connect to Arduino: {e}")
+        print(f"\nAvailable ports:")
+        # Try to list available ports
+        import serial.tools.list_ports
+        ports = list(serial.tools.list_ports.comports())
+        for p in ports:
+            print(f"  - {p.device}")
+        return
+    
+    # Open webcam
+    print(f"\nOpening camera (index {CAMERA_INDEX})...")
+    cap = cv2.VideoCapture(CAMERA_INDEX)
+    if not cap.isOpened():
+        print(f"❌ Error: Could not open camera {CAMERA_INDEX}")
+        print("Available cameras:", find_available_cameras())
+        ser.close()
+        return
+    print("✓ Camera opened")
+    
+    # Get camera properties
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    print(f"✓ Resolution: {frame_width}x{frame_height} @ {fps:.1f} FPS")
+    
+    # Initialize tracking variables
+    current_yaw = 90  # Center position
+    target_yaw = 90
+    
+    print("\n" + "=" * 60)
+    print("Tracking started! Press 'q' to quit")
+    print("=" * 60 + "\n")
+    
+    # Main loop
+    try:
+        while True:
+            # Read frame
+            ret, frame = cap.read()
+            if not ret:
+                print("Warning: Failed to capture frame")
+                continue
+            
+            # Flip horizontally for mirror effect
+            frame = cv2.flip(frame, 1)
+            
+            # Convert to grayscale for face detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            
+            # Detect faces
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=4,
+                minSize=(100, 100)  # Ignore small detections
+            )
+            
+            # Process detected faces
+            for x, y, w, h in faces:
+                # Calculate face center
+                center_x = x + w // 2
+                center_y = y + h // 2
+                
+                # Draw rectangle around face
+                cv2.rectangle(
+                    frame, 
+                    (x, y), 
+                    (x + w, y + h), 
+                    (0, 0, 255),  # Red
+                    2
+                )
+                
+                # Draw center point
+                cv2.circle(
+                    frame, 
+                    (center_x, center_y), 
+                    radius=4, 
+                    color=(0, 0, 255),  # Red
+                    thickness=-1
+                )
+                
+                # Calculate angles
+                # Note: frame_height - center_y flips Y axis
+                target_yaw = calculate_angle(center_x, frame_height - center_y)
+                
+                # Smooth the angle transition
+                current_yaw = smooth_angle(current_yaw, target_yaw)
+                
+                # Send to Arduino
+                data = str(current_yaw).encode()
+                ser.write(data)
+                
+                # Display angle on frame
+                cv2.putText(
+                    frame,
+                    f"Yaw: {current_yaw}°",
+                    (x, y - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 255, 0),
+                    2
+                )
+            
+            # Draw center reference point
+            cv2.circle(
+                frame,
+                (frame_width // 2, frame_height // 2),
+                radius=4,
+                color=(0, 255, 0),  # Green
+                thickness=-1
+            )
+            
+            # Draw crosshair
+            cv2.line(
+                frame,
+                (frame_width // 2, 0),
+                (frame_width // 2, frame_height),
+                (0, 255, 0),
+                1
+            )
+            cv2.line(
+                frame,
+                (0, frame_height // 2),
+                (frame_width, frame_height // 2),
+                (0, 255, 0),
+                1
+            )
+            
+            # Display status
+            status_text = f"Faces: {len(faces)} | Press 'q' to quit"
+            cv2.putText(
+                frame,
+                status_text,
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 255, 255),
+                2
+            )
+            
+            # Show frame
+            cv2.imshow("Laser Turret - Face Tracking", frame)
+            
+            # Check for quit key
+            if cv2.waitKey(FRAME_DELAY_MS) & 0xFF == QUIT_KEY:
+                print("\nQuit requested by user")
+                break
+                
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+    finally:
+        # Cleanup
+        print("\nCleaning up...")
+        cap.release()
+        cv2.destroyAllWindows()
+        ser.close()
+        print("✓ Shutdown complete")
 
-    # Check if frames were read correctly
-    if not ret:
-        print("Can't receive frame (stream end?). Exiting ...")
-        break
 
-    # Flip the frame horizontally
-    frame = cv2.flip(frame, 1)
-
-    # Convert frames to grayscale for face detection
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    # Perform face detection
-    faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-
-    # Draw rectangle around faces and a red dot at the center
-    for x, y, w, h in faces:
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
-        c_x, c_y = x + w // 2, y + h // 2  # Find center of rectangle
-
-        # Draw a point at the center of rectangle
-        cv2.circle(frame, (c_x, c_y), radius=2, color=(0, 0, 255), thickness=-1)
-
-        # Calculate angles and send to Arduino via serial connection
-        yaw = anglecalc(c_x, f_h - c_y)
-        # pitch = anglecalc(c_z,c_x)
-        pitch = DEFAULT_PITCH
-        data = str(yaw).encode()
-        print(data)
-        # time.sleep(1)
-        ser.write(data)
-
-    # Draw a green point at center of frame
-    cv2.circle(frame, (f_w // 2, f_h // 2), radius=2, color=(0, 255, 0), thickness=-1)
-
-    # Display resulting frames
-    cv2.imshow("Webcam", frame)
-
-    # Break loop on 'q' key press
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
-
-# Release webcam, destroy all windows and close serial connection after loop ends
-cap.release()
-cv2.destroyAllWindows()
-ser.close()
+if __name__ == "__main__":
+    main()
