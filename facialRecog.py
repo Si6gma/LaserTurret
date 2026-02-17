@@ -9,11 +9,23 @@ License: MIT
 """
 
 import cv2
+import logging
 import math
 import serial
 import time
 import os
 from typing import Tuple, Optional
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # CONFIGURATION
@@ -112,62 +124,64 @@ def find_available_cameras(max_index: int = 5) -> list[int]:
 def main():
     """Main application entry point."""
     
-    print("=" * 60)
-    print("Laser Turret - Face Tracking System")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Laser Turret - Face Tracking System")
+    logger.info("=" * 60)
     
     # Safety reminder
-    print("\n⚠️  SAFETY REMINDER:")
-    print("   Ensure laser is removed or replaced with LED before use!")
-    print("   Never aim at people's eyes.\n")
+    logger.warning("⚠️  SAFETY REMINDER:")
+    logger.warning("   Ensure laser is removed or replaced with LED before use!")
+    logger.warning("   Never aim at people's eyes.")
     
     # Load face detection model
-    print("Loading face detection model...")
+    logger.info("Loading face detection model...")
     face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
     if face_cascade.empty():
-        print("❌ Error: Could not load face cascade classifier")
+        logger.error("❌ Error: Could not load face cascade classifier")
         return
-    print("✓ Face detection model loaded")
+    logger.info("✓ Face detection model loaded")
     
     # Connect to Arduino
-    print(f"\nConnecting to Arduino on {SERIAL_PORT}...")
+    logger.info(f"Connecting to Arduino on {SERIAL_PORT}...")
     try:
         ser = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=1)
         time.sleep(2)  # Wait for Arduino reset
-        print("✓ Connected to Arduino")
+        logger.info("✓ Connected to Arduino")
     except serial.SerialException as e:
-        print(f"❌ Error: Could not connect to Arduino: {e}")
-        print(f"\nAvailable ports:")
+        logger.error(f"❌ Error: Could not connect to Arduino: {e}")
+        logger.info(f"Available ports:")
         # Try to list available ports
         import serial.tools.list_ports
         ports = list(serial.tools.list_ports.comports())
         for p in ports:
-            print(f"  - {p.device}")
+            logger.info(f"  - {p.device}")
         return
     
     # Open webcam
-    print(f"\nOpening camera (index {CAMERA_INDEX})...")
+    logger.info(f"Opening camera (index {CAMERA_INDEX})...")
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
-        print(f"❌ Error: Could not open camera {CAMERA_INDEX}")
-        print("Available cameras:", find_available_cameras())
+        logger.error(f"❌ Error: Could not open camera {CAMERA_INDEX}")
+        logger.info(f"Available cameras: {find_available_cameras()}")
         ser.close()
         return
-    print("✓ Camera opened")
+    logger.info("✓ Camera opened")
     
     # Get camera properties
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
-    print(f"✓ Resolution: {frame_width}x{frame_height} @ {fps:.1f} FPS")
+    logger.info(f"✓ Resolution: {frame_width}x{frame_height} @ {fps:.1f} FPS")
     
     # Initialize tracking variables
     current_yaw = 90  # Center position
     target_yaw = 90
+    current_pitch = DEFAULT_PITCH  # Center position
+    target_pitch = DEFAULT_PITCH
     
-    print("\n" + "=" * 60)
-    print("Tracking started! Press 'q' to quit")
-    print("=" * 60 + "\n")
+    logger.info("=" * 60)
+    logger.info("Tracking started! Press 'q' to quit")
+    logger.info("=" * 60)
     
     # Main loop
     try:
@@ -175,7 +189,7 @@ def main():
             # Read frame
             ret, frame = cap.read()
             if not ret:
-                print("Warning: Failed to capture frame")
+                logger.warning("Warning: Failed to capture frame")
                 continue
             
             # Flip horizontally for mirror effect
@@ -219,18 +233,20 @@ def main():
                 # Calculate angles
                 # Note: frame_height - center_y flips Y axis
                 target_yaw = calculate_angle(center_x, frame_height - center_y)
+                target_pitch = calculate_angle(center_y, frame_width - center_x)
                 
                 # Smooth the angle transition
                 current_yaw = smooth_angle(current_yaw, target_yaw)
+                current_pitch = smooth_angle(current_pitch, target_pitch)
                 
-                # Send to Arduino
-                data = str(current_yaw).encode()
+                # Send to Arduino (2-axis control: pitch,yaw)
+                data = f"{current_pitch},{current_yaw}\n".encode()
                 ser.write(data)
                 
                 # Display angle on frame
                 cv2.putText(
                     frame,
-                    f"Yaw: {current_yaw}°",
+                    f"Pitch: {current_pitch}° Yaw: {current_yaw}°",
                     (x, y - 10),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.6,
@@ -280,18 +296,18 @@ def main():
             
             # Check for quit key
             if cv2.waitKey(FRAME_DELAY_MS) & 0xFF == QUIT_KEY:
-                print("\nQuit requested by user")
+                logger.info("Quit requested by user")
                 break
                 
     except KeyboardInterrupt:
-        print("\nInterrupted by user")
+        logger.info("Interrupted by user")
     finally:
         # Cleanup
-        print("\nCleaning up...")
+        logger.info("Cleaning up...")
         cap.release()
         cv2.destroyAllWindows()
         ser.close()
-        print("✓ Shutdown complete")
+        logger.info("✓ Shutdown complete")
 
 
 if __name__ == "__main__":

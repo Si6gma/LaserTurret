@@ -1,3 +1,5 @@
 numpy==1.26.0
 opencv-python==4.8.1.78
 pyserial==3.5
+pytest>=7.0.0
+pytest-cov>=4.0.0
