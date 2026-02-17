@@ -27,5 +27,8 @@ pygame>=2.5.0
 # Serial (for optional debug/backup)
 pyserial>=3.5
 
+# Development/Testing
+pytest>=7.4.0
+
 # Optional: For better performance on Pi
 # picamera2>=0.3.0  # For Pi Camera Module
