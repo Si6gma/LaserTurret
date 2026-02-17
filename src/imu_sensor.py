@@ -52,12 +52,18 @@ GYRO_RANGE_1000DPS = 2
 @dataclass
 class IMUData:
     """Container for IMU sensor readings."""
-    accel: np.ndarray = np.zeros(3)  # m/s^2
-    gyro: np.ndarray = np.zeros(3)   # rad/s
+    accel: np.ndarray = None  # m/s^2
+    gyro: np.ndarray = None   # rad/s
     mag: Optional[np.ndarray] = None  # uT (MPU9250 only)
     temperature: float = 0.0         # Celsius
     timestamp: float = 0.0
     valid: bool = False
+    
+    def __post_init__(self):
+        if self.accel is None:
+            self.accel = np.zeros(3)
+        if self.gyro is None:
+            self.gyro = np.zeros(3)
 
 
 class IMUSensor:
