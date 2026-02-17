@@ -17,6 +17,13 @@ board>=1.0
 # NumPy for calculations
 numpy>=1.24.0
 
+# Web Interface
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# Gamepad Control
+pygame>=2.5.0
+
 # Serial (for optional debug/backup)
 pyserial>=3.5
 

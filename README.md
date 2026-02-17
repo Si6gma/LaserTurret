@@ -9,6 +9,8 @@ A 2-axis camera gimbal stabilizer with auto-framing and IMU-based stabilization,
 - **Real-Time Subject Tracking**: Face and body detection with smooth servo following
 - **Photo Capture**: Capture perfectly framed photos with single keypress
 - **2-Axis Control**: Pitch and yaw servo control via PCA9685 PWM driver
+- **Web Control Interface**: Control from any device on your network with live video stream
+- **Gamepad Support**: Use Xbox/PlayStation controllers for smooth manual control
 - **All-in-One Raspberry Pi**: No Arduino required - everything runs on the Pi
 
 ## Hardware Requirements
@@ -22,6 +24,7 @@ A 2-axis camera gimbal stabilizer with auto-framing and IMU-based stabilization,
 | IMU | MPU6050 or MPU9250 (I2C) | Motion sensing |
 | Power Supply | 5V 4A (separate from Pi) | Servo power |
 | Gimbal Frame | 3D printed or purchased | Camera mount |
+| Gamepad (optional) | Xbox, PlayStation, or USB | Manual control |
 
 ## Wiring
 
@@ -48,6 +51,9 @@ Pi Camera:
 
 OR USB Camera:
     Connect to USB port
+
+Gamepad (optional):
+    Connect via USB or Bluetooth
 ```
 
 ## Installation
@@ -103,29 +109,85 @@ STABILIZATION_GAIN = 0.7  # Increase if footage is still shaky
 
 ## Usage
 
-### Start the Gimbal
+### Option 1: Web Control (Recommended)
+
+Control the gimbal from any device on your network:
+
+```bash
+cd src
+sudo python3 web_server.py
+```
+
+Then open a browser on any device and go to:
+```
+http://[raspberry-pi-ip]:5000
+```
+
+Find your Pi's IP:
+```bash
+hostname -I
+```
+
+#### Web Interface Features:
+- **Live Video Stream**: MJPEG feed from the camera
+- **Virtual Joystick**: Click/touch and drag to pan/tilt manually
+- **Mode Toggles**: Turn stabilization and tracking on/off
+- **Photo Capture**: Click to save photos
+- **Center Button**: Return to center position
+- **Mobile Friendly**: Works on phones and tablets
+
+![Web Interface](https://via.placeholder.com/800x450/0d1117/8A00FF?text=Web+Control+Interface)
+
+### Option 2: Gamepad Control
+
+Use an Xbox, PlayStation, or USB gamepad for smooth manual control:
+
+```bash
+cd src
+sudo python3 gamepad_controller.py
+```
+
+#### Gamepad Controls:
+
+| Control | Action |
+|---------|--------|
+| **Left Stick** | Pan/Tilt gimbal |
+| **Right Stick** | Fine adjustment |
+| **A / Cross** | Capture photo |
+| **B / Circle** | Center gimbal |
+| **X / Square** | Toggle stabilization |
+| **Y / Triangle** | Toggle tracking |
+| **LB / L1** | Decrease speed |
+| **RB / R1** | Increase speed |
+| **Start** | Exit |
+
+The analog sticks provide much smoother control than keyboard or web joystick.
+
+### Option 3: Standalone (No Interface)
+
+Run the gimbal without any control interface:
 
 ```bash
 cd src
 sudo python3 gimbal_controller.py
 ```
 
-### Controls
-
+Controls:
 | Key | Action |
 |-----|--------|
 | `c` | Capture photo |
-| `s` | Toggle stabilization on/off |
-| `t` | Toggle tracking on/off |
+| `s` | Toggle stabilization |
+| `t` | Toggle tracking |
 | `q` | Quit |
 
-### Photo Output
+## Photo Output
 
 Photos are saved to `./photos/` with timestamp:
 ```
 photos/
   capture_20240217_143022.jpg
-  capture_20240217_143156.jpg
+  web_capture_20240217_143156.jpg
+  gamepad_capture_20240217_143220.jpg
 ```
 
 ## How It Works
@@ -144,15 +206,45 @@ photos/
 3. **Composition**: Calculates optimal gimbal angles using rule of thirds
 4. **Smoothing**: Exponential moving average prevents hunting
 
-### Coordinate Transform
+### Web Interface Architecture
 
 ```
-Camera Frame (pixels)     IMU (degrees/s)      Servo (degrees)
-┌─────────────────┐      ┌─────────────┐      ┌─────────────┐
-│   Subject       │  →   │  Gyro X     │  →   │  Pitch      │
-│     ●           │      │  Gyro Y     │      │  Yaw        │
-│   (x, y)        │      │  Gyro Z     │      │             │
-└─────────────────┘      └─────────────┘      └─────────────┘
+┌─────────────┐      WebSocket/HTTP      ┌─────────────┐
+│   Browser   │  <-------------------->  │  Flask API  │
+│  (Phone/PC) │     MJPEG Stream         │   (Pi)      │
+└─────────────┘                          └──────┬──────┘
+                                                │
+                    ┌─────────────┬─────────────┼─────────────┐
+                    │             │             │             │
+               ┌────▼────┐   ┌────▼────┐   ┌────▼────┐   ┌────▼────┐
+               │  Camera │   │  IMU    │   │ PCA9685 │   │  GPIO   │
+               │ Module  │   │MPU6050  │   │(Servos) │   │ (LEDs)  │
+               └─────────┘   └─────────┘   └─────────┘   └─────────┘
+```
+
+### Gamepad Control Flow
+
+```
+Gamepad Input → Pygame Events → Position Update → PCA9685 → Servos
+     ↑                                                    ↓
+     └──────────── Visual Feedback ← Camera ←─────────────┘
+```
+
+## Project Structure
+
+```
+LaserTurret/
+├── src/
+│   ├── gimbal_controller.py   # Main standalone application
+│   ├── web_server.py           # Flask web interface
+│   ├── gamepad_controller.py   # Gamepad control
+│   ├── servo_driver.py         # PCA9685 servo control
+│   ├── imu_sensor.py           # MPU6050 interface
+│   ├── stabilizer.py           # Sensor fusion & PID
+│   └── auto_framing.py         # Subject detection & framing
+├── config.py                   # Hardware configuration
+├── requirements.txt            # Python dependencies
+└── README.md
 ```
 
 ## Tuning
@@ -179,21 +271,6 @@ TRACKING_SMOOTHING = 0.3  # Faster response
 3. Check I2C cable length (keep under 30cm)
 4. Add capacitors near servo power input
 
-## Project Structure
-
-```
-LaserTurret/
-├── src/
-│   ├── gimbal_controller.py   # Main application
-│   ├── servo_driver.py         # PCA9685 servo control
-│   ├── imu_sensor.py           # MPU6050 interface
-│   ├── stabilizer.py           # Sensor fusion & PID
-│   └── auto_framing.py         # Subject detection & framing
-├── config.py                   # Hardware configuration
-├── requirements.txt            # Python dependencies
-└── README.md
-```
-
 ## Troubleshooting
 
 ### "No I2C devices found"
@@ -219,6 +296,27 @@ check CAMERA_INDEX in config.py (try 0, 1, 2...)
 2. Verify PCA9685 V+ is powered (not just VCC)
 3. Check servo channel numbers in config
 4. Test with `servo_driver.py` directly
+
+### Web interface not accessible
+```bash
+# Check Flask is listening on all interfaces
+# In web_server.py, app.run() should have host='0.0.0.0'
+
+# Check firewall
+sudo ufw allow 5000
+
+# Check Pi's IP
+hostname -I
+```
+
+### Gamepad not detected
+```bash
+# List connected controllers
+python3 -c "import pygame; pygame.init(); print([pygame.joystick.Joystick(i).get_name() for i in range(pygame.joystick.get_count())])"
+
+# For Bluetooth controllers, pair first
+bluetoothctl
+```
 
 ### Poor stabilization
 1. Calibrate IMU on startup (keep still for 2 seconds)
